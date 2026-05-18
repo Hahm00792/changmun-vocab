@@ -381,7 +381,7 @@ function Quiz({user,day,round,onBack,onDone}){
 
   if(loading) return <Spin/>;
 
-  if(!isDone&&!cur&&origRef.current.length>0){finish();;}
+  if(!isDone&&!cur&&origRef.current.length>0){finish();}
 
   if(isDone){
     return(
