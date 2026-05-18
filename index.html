@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>창문여고 단어장</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=DM+Serif+Display&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#f7f8fc;color:#1e1e3a;font-family:\'Noto Sans KR\',sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
+button{cursor:pointer;font-family:\'Noto Sans KR\',sans-serif;border:none;outline:none;}
+input{font-family:\'Noto Sans KR\',sans-serif;outline:none;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+.modal-overlay{position:fixed;inset:0;background:rgba(30,30,58,0.45);display:flex;align-items:center;justifyContent:center;z-index:999;padding:24px;animation:fadeIn 0.2s ease;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useRef}=React;
+
+const SUPABASE_URL=\'https://bemyxgilnwmxhqlwssun.supabase.co\';
+const SUPABASE_KEY=\'sb_publishable_tnypHyPcAbA08E7F8TMFXA_A0POvIWG\';
+const SITE_URL=\'https://changmun-vocab.vercel.app\';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const DAYS=[11,12,13,14,15,16,17,18,19,20];
+
+const C={
+  bg:\'#f7f8fc\',border:\'#e4e6f0\',
+  accent:\'#5b50e8\',accentLight:\'#ede9fe\',
+  ok:\'#16a34a\',okLight:\'#dcfce7\',
+  err:\'#dc2626\',errLight:\'#fee2e2\',
+  t1:\'#1e1e3a\',t2:\'#5a5a7a\',t3:\'#a0a0c0\'
+};
+
+function Spin(){
+  return(
+    <div style={{minHeight:\'100vh\',display:\'flex\',alignItems:\'center\',justifyContent:\'center\',flexDirection:\'column\',gap:12}}>
+      <div style={{width:32,height:32,border:`3px solid ${C.border}`,borderTop:`3px solid ${C.accent}`,borderRadius:\'50%\',animation:\'spin 0.7s linear infinite\'}}/>
+      <p style={{color:C.t3,fontSize:13}}>로딩 중...</p>
+    </div>
+  );
+}
+
+// ── 재도전 시 이어하기/처음부터 모달 ──
+function ResumeModal({day,round,onResume,onRestart,onClose}){
+  return(
+    <div className="modal-overlay" onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:\'white\',borderRadius:24,padding:\'40px 36px\',maxWidth:380,width:\'100%\',textAlign:\'center\',boxShadow:\'0 12px 48px rgba(91,80,232,0.18)\'}}>
+        <div style={{fontSize:40,marginBottom:14}}>📌</div>
+        <p style={{fontSize:18,fontWeight:700,color:C.t1,marginBottom:8}}>Day {day} 재도전</p>
+        <p style={{fontSize:13,color:C.t2,marginBottom:28,lineHeight:1.7}}>
+          <span style={{color:C.accent,fontWeight:700}}>{round===1?\'1회 객관식\':\'2회 주관식\'}</span> 재도전이에요.<br/>
+          이어서 할까요, 처음부터 할까요?
+        </p>
+        <div style={{display:\'flex\',gap:10}}>
+          <button onClick={onRestart} style={{flex:1,padding:\'13px 0\',background:\'#f0f1f8\',borderRadius:12,color:C.t2,fontSize:14,fontWeight:600}}>처음부터</button>
+          <button onClick={onResume} style={{flex:1,padding:\'13px 0\',background:C.accent,borderRadius:12,color:\'white\',fontSize:14,fontWeight:700}}>이어하기 →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 초기화 확인 모달 ──
+function ResetModal({onConfirm,onCancel}){
+  return(
+    <div className="modal-overlay" onClick={onCancel}>
+      <div onClick={e=>e.stopPropagation()} style={{background:\'white\',borderRadius:24,padding:\'40px 36px\',maxWidth:360,width:\'100%\',textAlign:\'center\',boxShadow:\'0 12px 48px rgba(220,38,38,0.15)\'}}>
+        <div style={{fontSize:40,marginBottom:14}}>⚠️</div>
+        <p style={{fontSize:18,fontWeight:700,color:C.t1,marginBottom:8}}>전체 진행 초기화</p>
+        <p style={{fontSize:13,color:C.t2,marginBottom:28,lineHeight:1.7}}>
+          모든 Day의 학습 기록이 삭제돼요.<br/>
+          <span style={{color:C.err,fontWeight:700}}>이 작업은 되돌릴 수 없어요.</span>
+        </p>
+        <div style={{display:\'flex\',gap:10}}>
+          <button onClick={onCancel} style={{flex:1,padding:\'13px 0\',background:\'#f0f1f8\',borderRadius:12,color:C.t2,fontSize:14,fontWeight:600}}>취소</button>
+          <button onClick={onConfirm} style={{flex:1,padding:\'13px 0\',background:C.err,borderRadius:12,color:\'white\',fontSize:14,fontWeight:700}}>초기화</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 로그인 ──
+function Login(){
+  const [email,setEmail]=useState(\'\');
+  const [password,setPassword]=useState(\'\');
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState(null);
+
+  const handleLogin=async()=>{
+    setLoading(true);
+    setError(null);
+    const {error}=await sb.auth.signInWithPassword({email,password});
+    if(error) setError(error.message);
+    setLoading(false);
+  };
+
+  const handleGoogleLogin=async()=>{
+    setLoading(true);
+    setError(null);
+    const {error}=await sb.auth.signInWithOAuth({provider:\'google\',options:{redirectTo:SITE_URL}});
+    if(error) setError(error.message);
+    setLoading(false);
+  };
+
+  return(
+    <div style={{minHeight:\'100vh\',display:\'flex\',alignItems:\'center\',justifyContent:\'center\',padding:24,background:C.bg}}>
+      <div style={{maxWidth:380,width:\'100%\',background:\'white\',borderRadius:24,padding:\'40px 36px\',textAlign:\'center\',boxShadow:\'0 12px 48px rgba(91,80,232,0.18)\'}}>
+        <div style={{fontSize:40,marginBottom:14}}>🏫</div>
+        <p style={{fontSize:18,fontWeight:700,color:C.t1,marginBottom:8}}>창문여자고등학교 Vocab Boost</p>
+        <p style={{fontSize:13,color:C.t2,marginBottom:28,lineHeight:1.7}}>부스터보카 고교내신편 · Day 11–20</p>
+
+        {error && <p style={{color:C.err,fontSize:13,marginBottom:16}}>{error}</p>}
+
+        <button onClick={handleGoogleLogin} disabled={loading}
+          style={{width:\'100%\',padding:\'13px 0\',background:C.accent,borderRadius:12,color:\'white\',fontSize:14,fontWeight:700,display:\'flex\',alignItems:\'center\',justifyContent:\'center\',gap:8,opacity:loading?0.7:1}}>
+          {loading ? <div style={{width:16,height:16,border:`2px solid ${C.accentLight}`,borderTop:`2px solid white`,borderRadius:\'50%\',animation:\'spin 0.7s linear infinite\'}}/> : \'\'}
+          Google로 로그인
+        </button>
+        <p style={{fontSize:11,color:C.t3,marginTop:12}}>학교 또는 개인 구글 계정 모두 사용 가능</p>
+      </div>
+    </div>
+  );
+}
+
+// ── 퀴즈 ──
+function Quiz({user,day,round,onBack,onDone}){
+  const origRef=useRef([]);
+  const extraRef=useRef([]);
+  const oi=useRef(0);
+  const ei=useRef(0);
+  const solvedRef=useRef(new Set());
+  const wrongCountRef=useRef({}); // {word_id: 틀린횟수}
+
+  const [tick,setTick]=useState(0);
+  const [allW,setAllW]=useState([]);
+  const [choices,setChoices]=useState([]);
+  const [sel,setSel]=useState(null);
+  const [ans,setAns]=useState(\'\');
+  const [fb,setFb]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [isDone,setIsDone]=useState(false);
+  const [wrongs,setWrongs]=useState(0);
+  const inputRef=useRef(null);
+
+  const re=()=>setTick(t=>t+1);
+
+  useEffect(()=>{
+    (async()=>{
+      const [{data:dw},{data:aw}]=await Promise.all([
+        sb.from(\'words\').select(\'*\').eq(\'day\',day).order(\'id\'),
+        sb.from(\'words\').select(\'*\')
+      ]);
+      if(dw) origRef.current=[...dw].sort(()=>Math.random()-0.5);
+      if(aw) setAllW(aw);
+      setLoading(false);
+      re();
+    })();
+  },[]);
+
+  useEffect(()=>{
+    if(round===2&&!loading&&fb===null&&inputRef.current) inputRef.current.focus();
+  },[tick,fb,loading]);
+
+  const cur=oi.current<origRef.current.length
+    ? origRef.current[oi.current]
+    : (ei.current<extraRef.current.length?extraRef.current[ei.current]:null);
+
+  const inOrig=()=>oi.current<origRef.current.length;
+
+  useEffect(()=>{
+    if(round===1&&cur&&allW.length>0){
+      const o=allW.filter(x=>x.id!==cur.id).sort(()=>Math.random()-0.5).slice(0,3);
+      setChoices([...o,cur].sort(()=>Math.random()-0.5));
+    }
+  },[tick,allW]);
+
+  const goNext()=>{
+    if(inOrig()) oi.current++;
+    else ei.current++;
+    re();
+  };
+
+  const correct()=>{
+    if(!cur) return;
+    if(inOrig()) solvedRef.current.add(cur.id);
+    const allOrigSolved=solvedRef.current.size>=origRef.current.length;
+    // 원본 구간에서 다 맞췄거나, extra 구간의 마지막 문제를 맞췄으면 완료
+    const isLastExtra=!inOrig()&&(ei.current+1)>=extraRef.current.length;
+    if(allOrigSolved&&(inOrig()||isLastExtra)){
+      setFb(\'ok\');
+      setTimeout(()=>{
+        setFb(null);
+        setIsDone(true);
+        sb.from(\'progress\').upsert(
+          {user_id:user.id,day,round,completed:true,completed_at:new Date().toISOString()},
+          {onConflict:\'user_id,day,round\'}
+        ).then(() => onDone(round)); // Supabase 업데이트 후 onDone 호출
+      },1000);
+      return;
+    }
+    setFb(\'ok\');
+    setTimeout(()=>{
+      setFb(null);setSel(null);setAns(\'\');
+      goNext();
+    },1000);
+  };
+
+  const wrong()=>{
+    if(cur){
+      wrongCountRef.current[cur.id]=(wrongCountRef.current[cur.id]||0)+1;
+    }
+    setWrongs(n=>n+1);
+    setFb(\'no\');
+  };
+
+  const wrongNext()=>{
+    if(!cur) return;
+    extraRef.current.push(cur);
+    setFb(null);setSel(null);setAns(\'\');
+    goNext();
+  };
+
+  const pickChoice=(c)=>{ if(fb!==null) return; setSel(c.id); c.id===cur.id?correct():wrong(); };
+  const submit=()=>{
+    if(!ans.trim()||fb!==null) return;
+    const n=s=>s.trim().toLowerCase().replace(/[-\\s]/g,\'\');
+    n(ans)===n(cur.word)?correct():wrong();
+  };
+  const keyDown=(e)=>{ if(e.key===\'Enter\'){ if(fb===null) submit(); else if(fb===\'no\') wrongNext(); } };
+
+  const totalOrig=origRef.current.length;
+  const solvedCount=solvedRef.current.size;
+  const pct=totalOrig>0?Math.min((solvedCount/totalOrig)*100,99):0;
+
+  if(loading) return <Spin/>;
+
+  if(!isDone&&!cur&&origRef.current.length>0){finish();}
+
+  if(isDone){
+    return(
+      <div style={{minHeight:\'100vh\',background:C.bg,display:\'flex\',alignItems:\'center\',justifyContent:\'center\',padding:24}}>
+        <div style={{maxWidth:380,width:\'100%\',background:\'white\',borderRadius:24,padding:\'44px 36px\',textAlign:\'center\',boxShadow:\'0 12px 48px rgba(91,80,232,0.18)\'}}>
+          <div style={{fontSize:40,marginBottom:14}}>🎉</div>
+          <p style={{fontSize:18,fontWeight:700,color:C.t1,marginBottom:8}}>Day {day} {round}회 완료!</p>
+          <p style={{fontSize:13,color:C.t2,marginBottom:28,lineHeight:1.7}}>
+            {wrongs===0 ? \'틀린 문제 없이 완벽하게 마쳤어요!\' : `총 ${wrongs}개의 문제를 틀렸어요.`}<br/>
+            수고 많으셨습니다!
+          </p>
+          <button onClick={onBack} style={{width:\'100%\',padding:\'13px 0\',background:C.accent,borderRadius:12,color:\'white\',fontSize:14,fontWeight:700}}>홈으로 돌아가기</button>
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div style={{minHeight:\'100vh\',background:C.bg,display:\'flex\',flexDirection:\'column\'}}>
+      {/* 헤더 */}
+      <div style={{background:\'white\',borderBottom:`1px solid ${C.border}`,padding:\'0 24px\',position:\'sticky\',top:0,zIndex:100}}>
+        <div style={{maxWidth:760,margin:\'0 auto\',display:\'flex\',alignItems:\'center\',justifyContent:\'space-between\',height:60}}>
+          <div style={{display:\'flex\',alignItems:\'center\',gap:10}}>
+            <button onClick={onBack} style={{width:36,height:36,borderRadius:100,background:C.bg,color:C.t2,fontSize:18,display:\'flex\',alignItems:\'center\',justifyContent:\'center\'}}>
+              ←
+            </button>
+            <span style={{fontFamily:\'DM Serif Display\',fontSize:19,color:C.accent}}>Vocab Boost</span>
+            <span style={{background:C.accentLight,color:C.accent,fontSize:11,padding:\'2px 9px\',borderRadius:100,fontWeight:700}}>Day {day} {round}회</span>
+          </div>
+          <p style={{fontFamily:\'JetBrains Mono\',fontSize:18,color:C.t2,fontWeight:600}}>{solvedCount}<span style={{fontSize:12,color:C.t3}}>/ {totalOrig}</span></p>
+        </div>
+      </div>
+
+      {/* 진행률 바 */}
+      <div style={{height:4,background:\'#f0f1f8\',borderRadius:100,overflow:\'hidden\'}}>
+        <div style={{height:\'100%\',width:`${pct}%`,background:`linear-gradient(90deg,${C.accent},#a78bfa)`,borderRadius:100,transition:\'width 0.6s ease\'}}/>
+      </div>
+
+      {/* 퀴즈 본문 */}
+      <div style={{flex:1,maxWidth:760,margin:\'0 auto\',padding:\'28px 24px\',width:\'100%\',display:\'flex\',flexDirection:\'column\',justifyContent:\'center\'}}>
+        {cur ? (
+          <div style={{animation:\'fadeIn 0.4s ease\'}}>
+            <p style={{fontSize:13,color:C.t2,marginBottom:10}}>{round===1?\'다음 중 이 단어의 뜻은?\':\'이 뜻을 가진 단어는?\'}</p>
+            <p style={{fontSize:28,fontWeight:700,color:C.t1,marginBottom:30,lineHeight:1.4}}>{round===1?cur.word:cur.mean}</p>
+
+            {round===1 ? (
+              <div style={{display:\'flex\',flexDirection:\'column\',gap:10}}>
+                {choices.map(c=>(
+                  <button key={c.id} onClick={()=>pickChoice(c)}
+                    style={{width:\'100%\',padding:\'16px 20px\',background:\'white\',borderRadius:16,textAlign:\'left\',boxShadow:\'0 2px 12px rgba(91,80,232,0.06)\'
+                      ,border:`1.5px solid ${sel===c.id?(c.id===cur.id?C.ok:C.err):C.border}`
+                      ,color:sel===c.id?(c.id===cur.id?C.ok:C.err):C.t1
+                      ,fontWeight:sel===c.id?700:500,transition:\'all 0.15s\',animation:\'fadeIn 0.3s ease both\'
+                    }}>
+                    {c.mean}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div style={{display:\'flex\',flexDirection:\'column\',gap:10}}>
+                <input ref={inputRef} value={ans} onChange={e=>setAns(e.target.value)} onKeyDown={keyDown}
+                  style={{width:\'100%\',padding:\'16px 20px\',background:\'white\',borderRadius:16,border:`1.5px solid ${fb===\'ok\'?C.ok:fb===\'no\'?C.err:C.border}`
+                    ,color:C.t1,fontSize:16,fontWeight:500,transition:\'all 0.15s\',animation:`fadeIn 0.3s ease both ${fb===\'no\'?\'shake 0.2s\':\'\'}`
+                  }} placeholder="정답을 입력하세요"/>
+                <button onClick={submit} disabled={!ans.trim()||fb!==null}
+                  style={{width:\'100%\',padding:\'16px 20px\',background:C.accent,borderRadius:12,color:\'white\',fontSize:16,fontWeight:700,opacity:(!ans.trim()||fb!==null)?0.7:1}}>
+                  제출
+                </button>
+              </div>
+            )}
+
+            {fb===\'no\' && (
+              <div style={{marginTop:20,textAlign:\'center\',animation:\'fadeIn 0.3s ease\'}}>
+                <p style={{fontSize:13,color:C.err,marginBottom:10}}>틀렸습니다. 정답은 <span style={{fontWeight:700}}>{cur.word}</span> 입니다.</p>
+                <button onClick={wrongNext} style={{background:C.err,color:\'white\',padding:\'8px 16px\',borderRadius:8,fontSize:13,fontWeight:600}}>다음 문제</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p style={{textAlign:\'center\',color:C.t2}}>모든 문제를 풀었습니다!</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── 리뷰 ──
+function Review({onBack}){
+  const [words,setWords]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    (async()=>{
+      const {data}=await sb.from(\'words\').select(\'*\').order(\'day\').order(\'id\');
+      if(data) setWords(data);
+      setLoading(false);
+    })();
+  },[]);
+
+  if(loading) return <Spin/>;
+
+  return(
+    <div style={{minHeight:\'100vh\',background:C.bg,display:\'flex\',flexDirection:\'column\'}}>
+      {/* 헤더 */}
+      <div style={{background:\'white\',borderBottom:`1px solid ${C.border}`,padding:\'0 24px\',position:\'sticky\',top:0,zIndex:100}}>
+        <div style={{maxWidth:760,margin:\'0 auto\',display:\'flex\',alignItems:\'center\',justifyContent:\'space-between\',height:60}}>
+          <div style={{display:\'flex\',alignItems:\'center\',gap:10}}>
+            <button onClick={onBack} style={{width:36,height:36,borderRadius:100,background:C.bg,color:C.t2,fontSize:18,display:\'flex\',alignItems:\'center\',justifyContent:\'center\'}}>
+              ←
+            </button>
+            <span style={{fontFamily:\'DM Serif Display\',fontSize:19,color:C.accent}}>Vocab Boost</span>
+            <span style={{background:C.accentLight,color:C.accent,fontSize:11,padding:\'2px 9px\',borderRadius:100,fontWeight:700}}>전체 단어 복습</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 단어 목록 */}
+      <div style={{flex:1,maxWidth:760,margin:\'0 auto\',padding:\'28px 24px\',width:\'100%\'}}>
+        <div style={{display:\'flex\',flexDirection:\'column\',gap:10}}>
+          {words.map(w=>(
+            <div key={w.id} style={{background:\'white\',borderRadius:14,padding:\'15px 20px\',boxShadow:\'0 1px 6px rgba(0,0,0,0.05)\'}}>
+              <p style={{fontSize:14,fontWeight:700,color:C.t1,marginBottom:4}}>{w.word}</p>
+              <p style={{fontSize:13,color:C.t2}}>{w.mean}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 홈 ──
+function Home({user,onQuiz,onReview}){
+  const [prog,setProg]=useState({});
+  const [loading,setLoading]=useState(true);
+  const [showReset,setShowReset]=useState(false);
+  const [resumeModal,setResumeModal]=useState(null); // {day,round} or null
+
+  const load=async()=>{
+    const {data}=await sb.from(\'progress\').select(\'*\').eq(\'user_id\',user.id);
+    const m={};
+    if(data) data.forEach(r=>{if(!m[r.day])m[r.day]={};m[r.day][r.round]=true;});
+    setProg(m);
+    setLoading(false);
+  };
+
+  useEffect(()=>{
+    load();
+  },[]); // 의존성 배열을 비워 초기 렌더링 시 한 번만 호출되도록 함
+
+  const handleReset=async()=>{
+    await sb.from(\'progress\').delete().eq(\'user_id\',user.id);
+    setProg({});
+    setShowReset(false);
+  };
+
+  const done=DAYS.reduce((a,d)=>a+(prog[d]?.[1]&&prog[d]?.[2]?1:0),0);
+  const total=DAYS.length;
+
+  return(
+    <div style={{minHeight:\'100vh\',background:C.bg}}>
+      {showReset&&<ResetModal onConfirm={handleReset} onCancel={()=>setShowReset(false)}/>}
+      {resumeModal&&(
+        <ResumeModal
+          day={resumeModal.day}
+          round={resumeModal.round}
+          onResume={()=>{setResumeModal(null);onQuiz(resumeModal.day,resumeModal.round);}}
+          onRestart={()=>{setResumeModal(null);onQuiz(resumeModal.day,1);}}
+          onClose={()=>setResumeModal(null)}
+        />
+      )}
+
+      {/* 헤더 */}
+      <div style={{background:\'white\',borderBottom:`1px solid ${C.border}`,padding:\'0 24px\',position:\'sticky\',top:0,zIndex:100}}>
+        <div style={{maxWidth:760,margin:\'0 auto\',display:\'flex\',alignItems:\'center\',justifyContent:\'space-between\',height:60}}>
+          <div style={{display:\'flex\',alignItems:\'center\',gap:10}}>
+            <span style={{fontFamily:\'DM Serif Display\',fontSize:19,color:C.accent}}>Vocab Boost</span>
+            <span style={{background:C.accentLight,color:C.accent,fontSize:11,padding:\'2px 9px\',borderRadius:100,fontWeight:700}}>창문여고</span>
+          </div>
+          <div style={{display:\'flex\',alignItems:\'center\',gap:8}}>
+            <span style={{fontSize:13,color:C.t2}}>{user.user_metadata?.name||user.email}</span>
+            <button onClick={()=>setShowReset(true)} style={{background:\'#fee2e2\',color:C.err,padding:\'6px 14px\',borderRadius:8,fontSize:13,fontWeight:600}}>초기화</button>
+            <button onClick={()=>{sessionStorage.clear();sb.auth.signOut();}} style={{background:\'#f0f1f8\',color:C.t2,padding:\'6px 14px\',borderRadius:8,fontSize:13,fontWeight:500}}>로그아웃</button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{maxWidth:760,margin:\'0 auto\',padding:\'28px 24px\'}}>
+        {/* 진행률 */}
+        <div style={{background:\'white\',borderRadius:20,padding:\'24px 28px\',marginBottom:16,boxShadow:\'0 2px 12px rgba(91,80,232,0.07)\'}}> {/* animation:\'fadeIn 0.4s ease\' 제거 */}
+          <div style={{display:\'flex\',justifyContent:\'space-between\',alignItems:\'center\',marginBottom:14,flexWrap:\'wrap\',gap:8}}>
+            <div>
+              <p style={{fontSize:16,fontWeight:700,color:C.t1,marginBottom:3}}>전체 진행률</p>
+              <p style={{fontSize:12,color:C.t3}}>부스터보카 고교내신편 Day 11–20</p>
+            </div>
+            <p style={{fontFamily:\'JetBrains Mono\',fontSize:26,color:C.accent,fontWeight:600}}>
+              {done}<span style={{fontSize:14,color:C.t3}}>/ {total}</span>
+            </p>
+          </div>
+          <div style={{height:8,background:\'#f0f1f8\',borderRadius:100,overflow:\'hidden\'}}>
+            <div style={{height:\'100%\',width:`${(done/total)*100}%`,background:`linear-gradient(90deg,${C.accent},#a78bfa)`,borderRadius:100,transition:\'width 0.6s ease\'}}/>
+          </div>
+          <p style={{marginTop:7,fontSize:12,color:C.t3}}>{Math.round((done/total)*100)}% 완료</p>
+        </div>
+
+        {/* 총괄 리뷰 */}
+        <button onClick={onReview}
+          style={{width:\'100%\',padding:\'18px 22px\',background:\'white\',border:`1.5px solid ${C.border}`,borderRadius:16,display:\'flex\',alignItems:\'center\',justifyContent:\'space-between\',marginBottom:20,boxShadow:\'0 2px 12px rgba(91,80,232,0.06)\'
+            ,transition:\'all 0.15s\',animation:\'fadeIn 0.4s ease\'
+          }}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.transform=\'translateY(-2px)\'}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform=\'translateY(0)\'}}>
+          <div style={{display:\'flex\',alignItems:\'center\',gap:14}}>
+            <div style={{width:40,height:40,background:C.accentLight,borderRadius:10,display:\'flex\',alignItems:\'center\',justifyContent:\'center\',fontSize:18}}>📖</div>
+            <div>
+              <p style={{fontWeight:700,fontSize:14,color:C.t1,marginBottom:4}}>전체 단어 복습</p>
+              <p style={{fontSize:12,color:C.t3}}>모든 Day의 단어를 한 번에 복습해요</p>
+            </div>
+          </div>
+          <div style={{fontSize:18,color:C.t3}}>→</div>
+        </button>
+
+        {/* Day 목록 */}
+        <div style={{display:\'flex\',flexDirection:\'column\',gap:10}}>
+          {DAYS.map((day,i)=>{
+            const r1=prog[day]?.[1]||false;
+            const r2=prog[day]?.[2]||false;
+            const allDone=r1&&r2;
+            return(
+              <div key={day}
+                style={{background:\'white\',borderRadius:14,padding:\'15px 20px\',boxShadow:\'0 1px 6px rgba(0,0,0,0.05)\'
+                  ,border:`1.5px solid ${allDone?\'#86efac\':C.border}`,animation:`fadeIn 0.3s ease ${i*0.03}s both`,transition:\'box-shadow 0.15s\'
+                }}
+                onMouseEnter={e=>e.currentTarget.style.boxShadow=\'0 4px 16px rgba(0,0,0,0.09)\'}
+                onMouseLeave={e=>e.currentTarget.style.boxShadow=\'0 1px 6px rgba(0,0,0,0.05)\'}>
+                <div style={{display:\'flex\',alignItems:\'center\',justifyContent:\'space-between\',flexWrap:\'wrap\',gap:10}}>
+                  <div style={{display:\'flex\',alignItems:\'center\',gap:14}}>
+                    <div style={{width:40,height:40,background:allDone?C.okLight:C.accentLight,borderRadius:10,display:\'flex\',alignItems:\'center\',justifyContent:\'center\',fontFamily:\'JetBrains Mono\',fontSize:13,fontWeight:700,color:allDone?C.ok:C.accent,flexShrink:0}}>
+                      {allDone?\'✓\':day}
+                    </div>
+                    <div>
+                      <p style={{fontWeight:700,fontSize:14,color:C.t1,marginBottom:4}}>Day {day}</p>
+                      <div style={{display:\'flex\',gap:5}}>
+                        {[{done:r1,label:\'1회 객관식\'},{done:r2,label:\'2회 주관식\'}].map(b=>(
+                          <span key={b.label} style={{fontSize:11,padding:\'2px 8px\',borderRadius:100,background:b.done?C.okLight:\'#f0f1f8\',color:b.done?C.ok:C.t3,fontWeight:500}}>
+                            {b.done?\'✓ \':\'\'}{b.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{display:\'flex\',gap:7}}>
+                    {[{
+                      round:1,label:\'1회\',sub:\'객관식\',done:r1,disabled:false
+                    },{
+                      round:2,label:\'2회\',sub:\'주관식\',done:r2,disabled:!r1
+                    }].map(b=>(
+                      <button key={b.round}
+                        onClick={()=>{
+                          if(b.done){
+                            // 완료된 것 재도전: 팝업으로 이어하기/처음부터 선택
+                            setResumeModal({day,round:b.round});
+                          } else {
+                            // 미완료: 바로 시작
+                            onQuiz(day,b.round);
+                          }
+                        }}
+                        disabled={b.disabled}
+                        style={{padding:\'7px 13px\',borderRadius:10,background:b.done?C.okLight:b.disabled?\'#f0f1f8\':C.accentLight,color:b.done?C.ok:b.disabled?C.t3:C.accent,opacity:b.disabled?0.5:1,fontWeight:700,fontSize:12,display:\'flex\',flexDirection:\'column\',alignItems:\'center\',gap:1,transition:\'all 0.15s\'
+                        }}
+                        onMouseEnter={e=>{if(!b.disabled)e.currentTarget.style.transform=\'translateY(-2px)\'}}
+                        onMouseLeave={e=>e.currentTarget.style.transform=\'translateY(0)\'}}>
+                        <span>{b.done?\'재도전\':b.label}</span>
+                        <span style={{fontSize:10,opacity:0.7,fontWeight:400}}>{b.sub}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App(){
+  const [user,setUser]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [screen,setScreen]=useState(\'home\'); // \'home\' | \'review\' | {day,round}
+  const [homeKey,setHomeKey]=useState(0); // Home 컴포넌트 리마운트를 위한 key
+  const goHome=()=>{
+    setScreen(\'home\');
+    setHomeKey(k=>k+1); // Home 컴포넌트 리마운트
+  };
+
+  useEffect(()=>{
+    sb.auth.getSession().then(({data:{session}})=>{setUser(session?.user??null);setLoading(false);});
+    const {data:{subscription}}=sb.auth.onAuthStateChange((_,s)=>setUser(s?.user??null));
+    return()=>subscription.unsubscribe();
+  },[]);
+
+  if(loading) return <Spin/>;
+  if(!user) return <Login/>;
+  if(screen===\'review\') return <Review onBack={goHome}/>;
+  if(screen!==\'home\'){
+    const {day,round}=screen;
+    return <Quiz key={`${day}-${round}`} user={user} day={day} round={round}
+      onBack={goHome}
+      onDone={(r)=>{ // Quiz 완료 시 호출
+        if(r===1) setScreen({day,round:2}); // 1회 완료 시 2회로 이동
+        else goHome(); // 2회 완료 시 홈으로 이동 (Home 컴포넌트 리마운트)
+      }}/>;
+  }
+  return <Home key={homeKey} user={user}
+    onQuiz={(d,r)=>setScreen({day:d,round:r})}
+    onReview={()=>setScreen(\'review\')}/>;
+}
+
+ReactDOM.createRoot(document.getElementById(\'root\')).render(<App/>);
+</script>
+</body>
+</html>
